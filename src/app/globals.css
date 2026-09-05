@@ -1,26 +1,182 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #faf7ff;
+    --foreground: #22003f;
+
+    --surface: #ffffff;
+    --surface-secondary: #f4e9ff;
+    --surface-purple: #ead7ff;
+
+    --border: rgba(85, 0, 166, 0.12);
+    --border-strong: rgba(85, 0, 166, 0.22);
+
+    --muted: #6f5582;
+    --muted-light: #947fa3;
+
+    --primary: #5500a6;
+    --primary-hover: #6a1bdb;
+    --primary-foreground: #ffffff;
+
+    --accent: #7f2ae8;
+    --accent-hover: #9d4bff;
+    --accent-soft: #ead7ff;
+
+    --purple-deep: #3a006c;
+    --purple-primary: #5500a6;
+    --purple-violet: #6a1bdb;
+    --purple-bright: #7f2ae8;
+    --purple-highlight: #9d4bff;
+    --purple-soft: #b77dff;
+    --purple-light: #d8b4ff;
+
+    --success: #16a34a;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 32px;
+
+    --shadow-sm: 0 2px 8px rgba(58, 0, 108, 0.06);
+    --shadow-md: 0 12px 35px rgba(58, 0, 108, 0.10);
+    --shadow-lg: 0 24px 70px rgba(58, 0, 108, 0.15);
+}
+
+.dark {
+    --background: #12001f;
+    --foreground: #f9f2ff;
+
+    --surface: #1c0630;
+    --surface-secondary: #250b3d;
+    --surface-purple: #32104f;
+
+    --border: rgba(216, 180, 255, 0.13);
+    --border-strong: rgba(216, 180, 255, 0.22);
+
+    --muted: #c2accf;
+    --muted-light: #947da2;
+
+    --primary: #9d4bff;
+    --primary-hover: #b77dff;
+    --primary-foreground: #ffffff;
+
+    --accent: #9d4bff;
+    --accent-hover: #b77dff;
+    --accent-soft: rgba(157, 75, 255, 0.16);
+
+    --purple-deep: #3a006c;
+    --purple-primary: #5500a6;
+    --purple-violet: #6a1bdb;
+    --purple-bright: #7f2ae8;
+    --purple-highlight: #9d4bff;
+    --purple-soft: #b77dff;
+    --purple-light: #d8b4ff;
+
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --danger: #f87171;
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 12px 35px rgba(0, 0, 0, 0.32);
+    --shadow-lg: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-surface: var(--surface);
+    --color-surface-secondary: var(--surface-secondary);
+    --color-surface-purple: var(--surface-purple);
+
+    --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
+
+    --color-muted: var(--muted);
+    --color-muted-light: var(--muted-light);
+
+    --color-primary: var(--primary);
+    --color-primary-hover: var(--primary-hover);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-hover: var(--accent-hover);
+    --color-accent-soft: var(--accent-soft);
+
+    --color-purple-deep: var(--purple-deep);
+    --color-purple-primary: var(--purple-primary);
+    --color-purple-violet: var(--purple-violet);
+    --color-purple-bright: var(--purple-bright);
+    --color-purple-highlight: var(--purple-highlight);
+    --color-purple-soft: var(--purple-soft);
+    --color-purple-light: var(--purple-light);
+
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-danger: var(--danger);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+::selection {
+    background: #9d4bff;
+    color: #ffffff;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(106, 27, 219, 0.35);
+    border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
