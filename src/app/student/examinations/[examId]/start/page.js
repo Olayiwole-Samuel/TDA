@@ -18,8 +18,7 @@ import {
     X,
 } from "lucide-react";
 
-import { supabase } from "@/lib/supabase/client";
-
+import { supabase } from "@/lib/supabase";
 function unwrap(value) {
     if (value == null) return null;
 
