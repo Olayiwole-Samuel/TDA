@@ -89,9 +89,76 @@ export default function LoginForm() {
                 return;
             }
 
-            console.log("Login successful:", data);
+            const user = data?.user;
 
-            router.replace("/student/dashboard");
+            if (!user) {
+                setServerError(
+                    "We couldn't identify your account. Please try again."
+                );
+                return;
+            }
+
+            /*
+             * Get the user's role from the profiles table.
+             *
+             * The public registration flow creates students.
+             * Teachers are created separately.
+             */
+            const { data: profile, error: profileError } =
+                await supabase
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", user.id)
+                    .single();
+
+            if (profileError) {
+                console.error("Profile lookup error:", {
+                    message: profileError?.message,
+                    code: profileError?.code,
+                    details: profileError?.details,
+                    hint: profileError?.hint,
+                });
+
+                await supabase.auth.signOut();
+
+                setServerError(
+                    "Your account profile could not be loaded. Please contact the Academy."
+                );
+
+                return;
+            }
+
+            if (!profile?.role) {
+                await supabase.auth.signOut();
+
+                setServerError(
+                    "Your account does not have a valid role. Please contact the Academy."
+                );
+
+                return;
+            }
+
+            /*
+             * Role-based navigation
+             */
+            if (profile.role === "student") {
+                router.replace("/student/dashboard");
+                return;
+            }
+
+            if (profile.role === "teacher") {
+                router.replace("/teacher/dashboard");
+                return;
+            }
+
+            /*
+             * We are not implementing admin yet.
+             */
+            await supabase.auth.signOut();
+
+            setServerError(
+                "This account type is not available yet. Please contact the Academy."
+            );
         } catch (error) {
             console.error("Unexpected login error:", error);
 
@@ -139,15 +206,17 @@ export default function LoginForm() {
                         type="email"
                         value={form.email}
                         onChange={(event) =>
-                            updateField("email", event.target.value)
+                            updateField(
+                                "email",
+                                event.target.value
+                            )
                         }
                         placeholder="you@example.com"
                         autoComplete="email"
-                        className={`h-12 w-full rounded-2xl border bg-surface px-4 text-sm outline-none transition-all placeholder:text-muted-light focus:border-purple-bright focus:ring-4 focus:ring-purple-bright/10 ${
-                            errors.email
+                        className={`h-12 w-full rounded-2xl border bg-surface px-4 text-sm outline-none transition-all placeholder:text-muted-light focus:border-purple-bright focus:ring-4 focus:ring-purple-bright/10 ${errors.email
                                 ? "border-danger"
                                 : "border-border"
-                        }`}
+                            }`}
                     />
 
                     {errors.email && (
@@ -163,7 +232,10 @@ export default function LoginForm() {
                     name="password"
                     value={form.password}
                     onChange={(event) =>
-                        updateField("password", event.target.value)
+                        updateField(
+                            "password",
+                            event.target.value
+                        )
                     }
                     error={errors.password}
                 />
@@ -200,7 +272,9 @@ export default function LoginForm() {
                     className="h-12 w-full"
                     disabled={loading}
                 >
-                    {loading ? "Signing in..." : "Sign in"}
+                    {loading
+                        ? "Signing in..."
+                        : "Sign in"}
                 </Button>
             </form>
 
