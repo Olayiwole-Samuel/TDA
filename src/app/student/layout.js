@@ -261,7 +261,6 @@ const themes = [
             </svg>
         ),
     },
-    
     {
         value: "dark",
         label: "Dark",
@@ -282,6 +281,24 @@ const themes = [
     },
 ];
 
+function getFirstName(name) {
+    if (!name) return "Student";
+
+    return name.trim().split(/\s+/)[0] || "Student";
+}
+
+function getInitial(name, email) {
+    if (name?.trim()) {
+        return name.trim().charAt(0).toUpperCase();
+    }
+
+    if (email) {
+        return email.charAt(0).toUpperCase();
+    }
+
+    return "S";
+}
+
 function ThemeSwitcher({ mobile = false }) {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
@@ -292,19 +309,13 @@ function ThemeSwitcher({ mobile = false }) {
 
     if (!mounted) {
         return (
-            <div
-                className={`rounded-full bg-surface-secondary/60 ${
-                    mobile ? "h-10 w-full" : "h-10 w-full"
-                }`}
-            />
+            <div className="h-10 w-full rounded-full bg-surface-secondary/60" />
         );
     }
 
     return (
         <div
-            className={`flex items-center rounded-full bg-surface-secondary/70 p-1 ${
-                mobile ? "w-full" : "w-full"
-            }`}
+            className="flex w-full items-center rounded-full bg-surface-secondary/70 p-1"
             role="group"
             aria-label="Choose appearance"
         >
@@ -318,18 +329,15 @@ function ThemeSwitcher({ mobile = false }) {
                         onClick={() => setTheme(item.value)}
                         aria-label={`Use ${item.label.toLowerCase()} theme`}
                         aria-pressed={active}
-                        className={`relative flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12px] font-medium transition-colors ${
-                            active
-                                ? "text-foreground"
-                                : "text-muted hover:text-foreground"
-                        }`}
+                        className={`relative flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full text-[12px] font-medium transition-colors ${active
+                            ? "text-foreground"
+                            : "text-muted hover:text-foreground"
+                            }`}
                     >
                         {active && (
                             <motion.span
                                 layoutId={
-                                    mobile
-                                        ? "mobile-theme-pill"
-                                        : "desktop-theme-pill"
+                                    mobile ? "mobile-theme-pill" : "desktop-theme-pill"
                                 }
                                 transition={{
                                     type: "spring",
@@ -359,19 +367,17 @@ function NavigationLink({ item, pathname, onNavigate }) {
 
     const active = matches.some(
         (path) =>
-            pathname === path ||
-            pathname.startsWith(`${path}/`)
+            pathname === path || pathname.startsWith(`${path}/`)
     );
 
     return (
         <Link
             href={item.href}
             onClick={onNavigate}
-            className={`group relative flex items-center gap-3 rounded-[12px] px-3 py-[9px] text-[14px] font-medium transition-colors ${
-                active
-                    ? "bg-purple-bright/10 text-purple-bright"
-                    : "text-muted hover:bg-surface-secondary hover:text-foreground"
-            }`}
+            className={`group relative flex items-center gap-3 rounded-[12px] px-3 py-[9px] text-[14px] font-medium transition-colors ${active
+                ? "bg-purple-bright/10 text-purple-bright"
+                : "text-muted hover:bg-surface-secondary hover:text-foreground"
+                }`}
         >
             {active && (
                 <motion.span
@@ -386,11 +392,10 @@ function NavigationLink({ item, pathname, onNavigate }) {
             )}
 
             <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] transition-colors ${
-                    active
-                        ? "bg-purple-bright/15 text-purple-bright"
-                        : "text-muted group-hover:text-foreground"
-                }`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] transition-colors ${active
+                    ? "bg-purple-bright/15 text-purple-bright"
+                    : "text-muted group-hover:text-foreground"
+                    }`}
             >
                 {item.icon}
             </span>
@@ -405,17 +410,23 @@ export default function StudentLayout({ children }) {
     const pathname = usePathname();
 
     const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [mobileOpen, setMobileOpen] = useState(false);
 
     useEffect(() => {
         let mounted = true;
 
-        const checkSession = async () => {
+        const loadStudent = async () => {
             try {
                 const {
                     data: { session },
+                    error: sessionError,
                 } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                    throw sessionError;
+                }
 
                 if (!mounted) return;
 
@@ -425,6 +436,17 @@ export default function StudentLayout({ children }) {
                 }
 
                 setUser(session.user);
+
+                const { data: profileData, error: profileError } =
+                    await supabase.rpc("get_my_profile");
+
+                if (profileError) {
+                    console.error("Student profile error:", profileError);
+                }
+
+                if (!mounted) return;
+
+                setProfile(profileData || null);
                 setLoading(false);
             } catch (error) {
                 console.error("Student session error:", error);
@@ -435,18 +457,29 @@ export default function StudentLayout({ children }) {
             }
         };
 
-        checkSession();
+        loadStudent();
 
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (!session?.user) {
                 router.replace("/login");
                 return;
             }
 
+            if (!mounted) return;
+
+            setUser(session.user);
+
+            const { data: profileData, error } =
+                await supabase.rpc("get_my_profile");
+
+            if (error) {
+                console.error("Student profile refresh error:", error);
+            }
+
             if (mounted) {
-                setUser(session.user);
+                setProfile(profileData || null);
             }
         });
 
@@ -466,15 +499,24 @@ export default function StudentLayout({ children }) {
         router.refresh();
     };
 
+    const fullName =
+        profile?.full_name ||
+        user?.user_metadata?.full_name ||
+        "Student";
+
+    const firstName = getFirstName(fullName);
+
+    const email = profile?.email || user?.email || "";
+
+    const initial = getInitial(fullName, email);
+
     if (loading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-3">
                     <div className="h-9 w-9 animate-spin rounded-full border-[2.5px] border-border border-t-purple-bright" />
 
-                    <p className="text-[13px] font-medium text-muted">
-                        Loading...
-                    </p>
+                    <p className="text-[13px] font-medium text-muted">Loading...</p>
                 </div>
             </div>
         );
@@ -486,10 +528,7 @@ export default function StudentLayout({ children }) {
             <aside className="fixed inset-y-0 left-0 z-40 hidden w-[260px] border-r border-border/60 bg-surface/80 backdrop-blur-2xl lg:flex lg:flex-col">
                 {/* Brand */}
                 <div className="flex h-[72px] items-center px-5">
-                    <Link
-                        href="/"
-                        className="group flex items-center gap-3"
-                    >
+                    <Link href="/" className="group flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-purple-primary text-[13px] font-semibold text-white shadow-sm transition-transform duration-200 group-hover:scale-[1.03]">
                             TDA
                         </div>
@@ -509,10 +548,7 @@ export default function StudentLayout({ children }) {
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto px-3 py-3">
                     {navigationSections.map((section) => (
-                        <div
-                            key={section.label}
-                            className="mb-5 last:mb-0"
-                        >
+                        <div key={section.label} className="mb-5 last:mb-0">
                             <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
                                 {section.label}
                             </p>
@@ -545,17 +581,13 @@ export default function StudentLayout({ children }) {
                         className="mb-1 flex items-center gap-3 rounded-[12px] px-2 py-2 transition-colors hover:bg-surface-secondary"
                     >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-bright/12 text-[13px] font-semibold text-purple-bright">
-                            {user?.email?.charAt(0).toUpperCase() || "S"}
+                            {initial}
                         </div>
 
                         <div className="min-w-0 flex-1">
-                            <p className="text-[14px] font-medium">
-                                Student
-                            </p>
+                            <p className="truncate text-[14px] font-medium">{fullName}</p>
 
-                            <p className="truncate text-[12px] text-muted">
-                                {user?.email}
-                            </p>
+                            <p className="truncate text-[12px] text-muted">{email}</p>
                         </div>
                     </Link>
 
@@ -572,10 +604,7 @@ export default function StudentLayout({ children }) {
             {/* Mobile Header */}
             <header className="fixed inset-x-0 top-0 z-40 border-b border-border/60 bg-surface/80 px-4 backdrop-blur-2xl lg:hidden">
                 <div className="flex h-14 items-center justify-between">
-                    <Link
-                        href="/"
-                        className="flex items-center gap-2.5"
-                    >
+                    <Link href="/" className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-purple-primary text-[12px] font-semibold text-white">
                             TDA
                         </div>
@@ -587,66 +616,29 @@ export default function StudentLayout({ children }) {
 
                     <button
                         type="button"
-                        onClick={() =>
-                            setMobileOpen((value) => !value)
-                        }
-                        aria-label={
-                            mobileOpen
-                                ? "Close navigation"
-                                : "Open navigation"
-                        }
+                        onClick={() => setMobileOpen((value) => !value)}
+                        aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
                         aria-expanded={mobileOpen}
                         className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-secondary/80 text-[17px] text-foreground transition-colors active:scale-95"
                     >
-                        <AnimatePresence
-                            mode="wait"
-                            initial={false}
-                        >
+                        <AnimatePresence mode="wait" initial={false}>
                             {mobileOpen ? (
                                 <motion.span
                                     key="close"
-                                    initial={{
-                                        opacity: 0,
-                                        rotate: -90,
-                                        scale: 0.7,
-                                    }}
-                                    animate={{
-                                        opacity: 1,
-                                        rotate: 0,
-                                        scale: 1,
-                                    }}
-                                    exit={{
-                                        opacity: 0,
-                                        rotate: 90,
-                                        scale: 0.7,
-                                    }}
-                                    transition={{
-                                        duration: 0.15,
-                                    }}
+                                    initial={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                                    exit={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                                    transition={{ duration: 0.15 }}
                                 >
                                     ✕
                                 </motion.span>
                             ) : (
                                 <motion.span
                                     key="menu"
-                                    initial={{
-                                        opacity: 0,
-                                        rotate: 90,
-                                        scale: 0.7,
-                                    }}
-                                    animate={{
-                                        opacity: 1,
-                                        rotate: 0,
-                                        scale: 1,
-                                    }}
-                                    exit={{
-                                        opacity: 0,
-                                        rotate: -90,
-                                        scale: 0.7,
-                                    }}
-                                    transition={{
-                                        duration: 0.15,
-                                    }}
+                                    initial={{ opacity: 0, rotate: 90, scale: 0.7 }}
+                                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                                    exit={{ opacity: 0, rotate: -90, scale: 0.7 }}
+                                    transition={{ duration: 0.15 }}
                                 >
                                     ☰
                                 </motion.span>
@@ -669,56 +661,28 @@ export default function StudentLayout({ children }) {
                         />
 
                         <motion.div
-                            initial={{
-                                opacity: 0,
-                                y: -8,
-                                scale: 0.98,
-                            }}
-                            animate={{
-                                opacity: 1,
-                                y: 0,
-                                scale: 1,
-                            }}
-                            exit={{
-                                opacity: 0,
-                                y: -8,
-                                scale: 0.98,
-                            }}
-                            transition={{
-                                duration: 0.2,
-                                ease: [0.22, 1, 0.36, 1],
-                            }}
+                            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                             className="fixed inset-x-3 top-[68px] z-40 max-h-[calc(100vh-84px)] overflow-y-auto rounded-[20px] border border-border/60 bg-surface/95 p-2 shadow-xl backdrop-blur-2xl lg:hidden"
                         >
                             <nav>
                                 {navigationSections.map((section) => (
-                                    <div
-                                        key={section.label}
-                                        className="mb-4 last:mb-0"
-                                    >
+                                    <div key={section.label} className="mb-4 last:mb-0">
                                         <p className="mb-1.5 px-3 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
                                             {section.label}
                                         </p>
 
                                         <div className="space-y-0.5">
-                                            {section.items.map(
-                                                (item) => (
-                                                    <NavigationLink
-                                                        key={
-                                                            item.label
-                                                        }
-                                                        item={item}
-                                                        pathname={
-                                                            pathname
-                                                        }
-                                                        onNavigate={() =>
-                                                            setMobileOpen(
-                                                                false
-                                                            )
-                                                        }
-                                                    />
-                                                )
-                                            )}
+                                            {section.items.map((item) => (
+                                                <NavigationLink
+                                                    key={item.label}
+                                                    item={item}
+                                                    pathname={pathname}
+                                                    onNavigate={() => setMobileOpen(false)}
+                                                />
+                                            ))}
                                         </div>
                                     </div>
                                 ))}
@@ -740,13 +704,17 @@ export default function StudentLayout({ children }) {
                                 href="/student/profile"
                                 className="flex items-center gap-3 rounded-[12px] px-3 py-3 text-[15px] text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
                             >
-                                <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-surface-secondary text-[13px]">
-                                    {user?.email
-                                        ?.charAt(0)
-                                        .toUpperCase() || "S"}
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-purple-bright/12 text-[13px] font-semibold text-purple-bright">
+                                    {initial}
                                 </span>
 
-                                Profile
+                                <div className="min-w-0">
+                                    <p className="truncate font-medium text-foreground">
+                                        {fullName}
+                                    </p>
+
+                                    <p className="truncate text-[12px] text-muted">Profile</p>
+                                </div>
                             </Link>
 
                             <button
@@ -768,9 +736,7 @@ export default function StudentLayout({ children }) {
             {/* Main Content */}
             <main className="min-h-screen lg:pl-[260px]">
                 <div className="px-4 pb-12 pt-20 sm:px-6 lg:px-8 lg:pt-8">
-                    <div className="mx-auto max-w-6xl">
-                        {children}
-                    </div>
+                    <div className="mx-auto max-w-6xl">{children}</div>
                 </div>
             </main>
         </div>
