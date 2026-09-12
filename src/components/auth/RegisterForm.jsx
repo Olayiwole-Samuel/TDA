@@ -1,505 +1,479 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, Loader2, ArrowRight, Check } from "lucide-react";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-import Button from "@/components/ui/Button";
-import PasswordInput from "./PasswordInput";
+import { supabase } from "@/lib/supabase";
 
-const countries = [
-    { name: "Nigeria", code: "NG", dialCode: "+234", flag: "🇳🇬" },
-    { name: "United States", code: "US", dialCode: "+1", flag: "🇺🇸" },
-    { name: "United Kingdom", code: "GB", dialCode: "+44", flag: "🇬🇧" },
-    { name: "Canada", code: "CA", dialCode: "+1", flag: "🇨🇦" },
-    { name: "Ghana", code: "GH", dialCode: "+233", flag: "🇬🇭" },
-    { name: "South Africa", code: "ZA", dialCode: "+27", flag: "🇿🇦" },
-    { name: "Australia", code: "AU", dialCode: "+61", flag: "🇦🇺" },
-    { name: "Germany", code: "DE", dialCode: "+49", flag: "🇩🇪" },
-    { name: "France", code: "FR", dialCode: "+33", flag: "🇫🇷" },
-    {
-        name: "United Arab Emirates",
-        code: "AE",
-        dialCode: "+971",
-        flag: "🇦🇪",
-    },
+const COUNTRIES = [
+    { code: "NG", name: "Nigeria", dialCode: "+234" },
+    { code: "US", name: "United States", dialCode: "+1" },
+    { code: "GB", name: "United Kingdom", dialCode: "+44" },
+    { code: "CA", name: "Canada", dialCode: "+1" },
+    { code: "GH", name: "Ghana", dialCode: "+233" },
+    { code: "ZA", name: "South Africa", dialCode: "+27" },
+    { code: "AU", name: "Australia", dialCode: "+61" },
+    { code: "DE", name: "Germany", dialCode: "+49" },
+    { code: "FR", name: "France", dialCode: "+33" },
+    { code: "AE", name: "United Arab Emirates", dialCode: "+971" },
 ];
 
+function getInitialCountry() {
+    return COUNTRIES.find((country) => country.code === "NG") || COUNTRIES[0];
+}
+
 export default function RegisterForm() {
+    const router = useRouter();
+
     const [form, setForm] = useState({
         fullName: "",
         email: "",
-        country: "Nigeria",
+        country: "NG",
         phone: "",
         password: "",
         confirmPassword: "",
         terms: false,
     });
 
-    const [errors, setErrors] = useState({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [serverError, setServerError] = useState("");
-    const [success, setSuccess] = useState(false);
+    const [error, setError] = useState("");
 
     const selectedCountry =
-        countries.find((country) => country.name === form.country) || countries[0];
+        COUNTRIES.find((country) => country.code === form.country) ||
+        getInitialCountry();
 
-    const updateField = (field, value) => {
+    function handleChange(event) {
+        const { name, value, type, checked } = event.target;
+
         setForm((current) => ({
             ...current,
-            [field]: value,
+            [name]: type === "checkbox" ? checked : value,
         }));
 
-        setErrors((current) => ({
-            ...current,
-            [field]: "",
-        }));
+        if (error) {
+            setError("");
+        }
+    }
 
-        setServerError("");
-    };
+    function validatePhone() {
+        const rawPhone = form.phone.trim();
 
-    const validatePhoneNumber = () => {
-        if (!form.phone.trim()) {
-            return "Please enter your phone number.";
+        if (!rawPhone) {
+            return {
+                valid: false,
+                message: "Please enter your phone number.",
+            };
         }
 
-        try {
-            const phoneNumber = parsePhoneNumberFromString(
-                form.phone,
-                selectedCountry.code
-            );
+        const phoneWithCountryCode = rawPhone.startsWith("+")
+            ? rawPhone
+            : `${selectedCountry.dialCode}${rawPhone.replace(/\D/g, "")}`;
 
-            if (!phoneNumber || !phoneNumber.isValid()) {
-                return `Please enter a valid ${selectedCountry.name} phone number.`;
-            }
+        const phoneNumber = parsePhoneNumberFromString(phoneWithCountryCode);
 
-            return "";
-        } catch {
-            return `Please enter a valid ${selectedCountry.name} phone number.`;
-        }
-    };
-
-    const validate = () => {
-        const nextErrors = {};
-
-        if (!form.fullName.trim()) {
-            nextErrors.fullName = "Please enter your full name.";
-        } else if (form.fullName.trim().length < 2) {
-            nextErrors.fullName = "Please enter your full name.";
+        if (!phoneNumber || !phoneNumber.isValid()) {
+            return {
+                valid: false,
+                message: "Please enter a valid phone number.",
+            };
         }
 
-        if (!form.email.trim()) {
-            nextErrors.email = "Please enter your email address.";
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-            nextErrors.email = "Please enter a valid email address.";
-        }
+        return {
+            valid: true,
+            value: phoneNumber.number,
+        };
+    }
 
-        const phoneError = validatePhoneNumber();
-
-        if (phoneError) {
-            nextErrors.phone = phoneError;
-        }
-
-        if (!form.password) {
-            nextErrors.password = "Please create a password.";
-        } else if (form.password.length < 8) {
-            nextErrors.password = "Password must be at least 8 characters.";
-        }
-
-        if (!form.confirmPassword) {
-            nextErrors.confirmPassword = "Please confirm your password.";
-        } else if (form.password !== form.confirmPassword) {
-            nextErrors.confirmPassword = "Passwords do not match.";
-        }
-
-        if (!form.terms) {
-            nextErrors.terms = "You must agree to the Academy terms.";
-        }
-
-        setErrors(nextErrors);
-
-        return Object.keys(nextErrors).length === 0;
-    };
-
-    const getRedirectUrl = () => {
-        const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-
-        if (configuredUrl) {
-            return `${configuredUrl.replace(/\/$/, "")}/auth/callback`;
-        }
-
-        if (typeof window !== "undefined") {
-            return `${window.location.origin}/auth/callback`;
-        }
-
-        return undefined;
-    };
-
-    const getFriendlyError = (message) => {
-        const lowerMessage = message?.toLowerCase() || "";
-
-        if (
-            lowerMessage.includes("user already registered") ||
-            lowerMessage.includes("already been registered")
-        ) {
-            return "An account with this email already exists. Please sign in instead.";
-        }
-
-        if (lowerMessage.includes("email rate limit exceeded")) {
-            return "Too many verification emails have been requested. Please wait a while before trying again.";
-        }
-
-        if (lowerMessage.includes("password should be at least")) {
-            return "Your password is too short. Please use at least 8 characters.";
-        }
-
-        if (lowerMessage.includes("invalid email")) {
-            return "Please enter a valid email address.";
-        }
-
-        return (
-            message || "We couldn't create your account. Please try again."
-        );
-    };
-
-    const handleSubmit = async (event) => {
+    async function handleSubmit(event) {
         event.preventDefault();
 
         if (loading) return;
 
-        setServerError("");
-        setSuccess(false);
+        setError("");
 
-        if (!validate()) return;
+        const fullName = form.fullName.trim();
+        const email = form.email.trim().toLowerCase();
 
-        const phoneNumber = parsePhoneNumberFromString(
-            form.phone,
-            selectedCountry.code
-        );
-
-        if (!phoneNumber || !phoneNumber.isValid()) {
-            setErrors((current) => ({
-                ...current,
-                phone: `Please enter a valid ${selectedCountry.name} phone number.`,
-            }));
-
+        if (!fullName) {
+            setError("Please enter your full name.");
             return;
         }
 
-        const email = form.email.trim().toLowerCase();
-        const fullName = form.fullName.trim();
-        const normalizedPhone = phoneNumber.number;
+        if (fullName.length < 2) {
+            setError("Please enter your complete name.");
+            return;
+        }
+
+        if (!email) {
+            setError("Please enter your email address.");
+            return;
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setError("Please enter a valid email address.");
+            return;
+        }
+
+        const phoneValidation = validatePhone();
+
+        if (!phoneValidation.valid) {
+            setError(phoneValidation.message);
+            return;
+        }
+
+        if (form.password.length < 8) {
+            setError("Your password must be at least 8 characters.");
+            return;
+        }
+
+        if (form.password !== form.confirmPassword) {
+            setError("Your passwords do not match.");
+            return;
+        }
+
+        if (!form.terms) {
+            setError("Please accept the terms and conditions.");
+            return;
+        }
 
         try {
             setLoading(true);
 
-            const redirectTo = getRedirectUrl();
-
-            const { data, error } = await supabase.auth.signUp({
+            const { data, error: signUpError } = await supabase.auth.signUp({
                 email,
                 password: form.password,
-
                 options: {
-                    ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
-
                     data: {
                         full_name: fullName,
                         country: selectedCountry.code,
-                        phone: normalizedPhone,
+                        phone: phoneValidation.value,
                     },
                 },
             });
 
-            if (error) {
-                console.error("Supabase registration error:", error);
-
-                setServerError(getFriendlyError(error.message));
-
-                return;
+            if (signUpError) {
+                throw signUpError;
             }
-
-            /*
-             * With email confirmation enabled,
-             * Supabase normally returns:
-             *
-             * data.user  -> created user
-             * data.session -> null
-             *
-             * That is expected.
-             */
 
             if (!data?.user) {
-                setServerError(
+                throw new Error(
                     "Your account could not be created. Please try again."
                 );
-
-                return;
             }
 
-            console.log("Registration successful:", {
-                userId: data.user.id,
-                email: data.user.email,
-                emailConfirmed: data.user.email_confirmed_at,
-                hasSession: Boolean(data.session),
-            });
+            if (!data?.session) {
+                throw new Error(
+                    "Your account was created, but automatic sign-in was not completed. Please try logging in."
+                );
+            }
 
-            setSuccess(true);
+            router.replace("/student/dashboard");
+            router.refresh();
+        } catch (err) {
+            console.error("Registration error:", err);
 
-            window.location.href = "/verify-email";
-        } catch (error) {
-            console.error("Registration error:", error);
+            let message =
+                err?.message ||
+                "Something went wrong while creating your account.";
 
-            setServerError(
-                "Something went wrong while creating your account. Please try again."
-            );
+            if (message.toLowerCase().includes("already registered")) {
+                message =
+                    "An account with this email already exists. Please log in instead.";
+            }
+
+            if (message.toLowerCase().includes("user already registered")) {
+                message =
+                    "An account with this email already exists. Please log in instead.";
+            }
+
+            setError(message);
         } finally {
             setLoading(false);
         }
-    };
+    }
 
     return (
-        <div>
-            <div className="mb-8 text-center">
-                <p className="text-sm font-medium text-purple-bright">
-                    Join the Academy
-                </p>
+        <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="w-full"
+        >
+            <div className="mb-8">
+                <div className="mb-3 inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-600 dark:text-purple-300">
+                    Student Registration
+                </div>
 
-                <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                    Begin your journey.
+                <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl">
+                    Create your account
                 </h1>
 
-                <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-muted">
-                    Create your account and take the first step toward growing in
-                    knowledge, character, faith and purpose.
+                <p className="mt-2 text-sm leading-6 text-[var(--foreground-muted)]">
+                    Create your account and begin your discipleship journey.
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            {error && (
+                <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-600 dark:text-red-300"
+                >
+                    {error}
+                </motion.div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                     <label
                         htmlFor="fullName"
-                        className="mb-2 block text-sm font-medium"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
                     >
                         Full name
                     </label>
 
                     <input
                         id="fullName"
+                        name="fullName"
                         type="text"
                         value={form.fullName}
-                        onChange={(event) => updateField("fullName", event.target.value)}
+                        onChange={handleChange}
                         placeholder="Enter your full name"
                         autoComplete="name"
                         disabled={loading}
-                        className={`
-              h-12 w-full rounded-2xl border
-              bg-surface px-4 text-sm outline-none
-              transition-all
-              placeholder:text-muted-light
-              focus:border-purple-bright
-              focus:ring-4 focus:ring-purple-bright/10
-              disabled:cursor-not-allowed disabled:opacity-60
-              ${errors.fullName ? "border-danger" : "border-border"}
-            `}
+                        className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     />
-
-                    {errors.fullName && (
-                        <p className="mt-2 text-xs text-danger">{errors.fullName}</p>
-                    )}
                 </div>
 
                 <div>
-                    <label htmlFor="email" className="mb-2 block text-sm font-medium">
+                    <label
+                        htmlFor="email"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
+                    >
                         Email address
                     </label>
 
                     <input
                         id="email"
+                        name="email"
                         type="email"
                         value={form.email}
-                        onChange={(event) => updateField("email", event.target.value)}
+                        onChange={handleChange}
                         placeholder="you@example.com"
                         autoComplete="email"
                         disabled={loading}
-                        className={`
-              h-12 w-full rounded-2xl border
-              bg-surface px-4 text-sm outline-none
-              transition-all
-              placeholder:text-muted-light
-              focus:border-purple-bright
-              focus:ring-4 focus:ring-purple-bright/10
-              disabled:cursor-not-allowed disabled:opacity-60
-              ${errors.email ? "border-danger" : "border-border"}
-            `}
+                        className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                     />
-
-                    {errors.email && (
-                        <p className="mt-2 text-xs text-danger">{errors.email}</p>
-                    )}
                 </div>
-
-                <div className="grid gap-4 sm:grid-cols-[0.9fr_1.1fr]">
-                    <div>
-                        <label
-                            htmlFor="country"
-                            className="mb-2 block text-sm font-medium"
-                        >
-                            Country
-                        </label>
-
-                        <select
-                            id="country"
-                            value={form.country}
-                            disabled={loading}
-                            onChange={(event) => {
-                                setForm((current) => ({
-                                    ...current,
-                                    country: event.target.value,
-                                    phone: "",
-                                }));
-
-                                setErrors((current) => ({
-                                    ...current,
-                                    country: "",
-                                    phone: "",
-                                }));
-                            }}
-                            className="
-                h-12 w-full appearance-none
-                rounded-2xl border border-border
-                bg-surface px-4 text-sm
-                outline-none transition-all
-                focus:border-purple-bright
-                focus:ring-4
-                focus:ring-purple-bright/10
-                disabled:cursor-not-allowed disabled:opacity-60
-              "
-                        >
-                            {countries.map((country) => (
-                                <option key={country.code} value={country.name}>
-                                    {country.flag} {country.name} ({country.dialCode})
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label htmlFor="phone" className="mb-2 block text-sm font-medium">
-                            Phone number
-                        </label>
-
-                        <div
-                            className={`
-                flex h-12 overflow-hidden
-                rounded-2xl border
-                bg-surface
-                transition-all
-                focus-within:border-purple-bright
-                focus-within:ring-4
-                focus-within:ring-purple-bright/10
-                ${errors.phone ? "border-danger" : "border-border"}
-              `}
-                        >
-                            <div className="flex items-center border-r border-border bg-surface-secondary px-3 text-sm font-medium text-muted">
-                                {selectedCountry.dialCode}
-                            </div>
-
-                            <input
-                                id="phone"
-                                type="tel"
-                                value={form.phone}
-                                onChange={(event) => updateField("phone", event.target.value)}
-                                placeholder="801 234 5678"
-                                autoComplete="tel"
-                                disabled={loading}
-                                className="
-                  min-w-0 flex-1
-                  bg-transparent px-3
-                  text-sm outline-none
-                  placeholder:text-muted-light
-                  disabled:cursor-not-allowed disabled:opacity-60
-                "
-                            />
-                        </div>
-
-                        {errors.phone && (
-                            <p className="mt-2 text-xs text-danger">{errors.phone}</p>
-                        )}
-                    </div>
-                </div>
-
-                <PasswordInput
-                    label="Password"
-                    name="password"
-                    value={form.password}
-                    onChange={(event) => updateField("password", event.target.value)}
-                    error={errors.password}
-                />
-
-                <PasswordInput
-                    label="Confirm password"
-                    name="confirmPassword"
-                    value={form.confirmPassword}
-                    onChange={(event) =>
-                        updateField("confirmPassword", event.target.value)
-                    }
-                    placeholder="Re-enter your password"
-                    error={errors.confirmPassword}
-                />
 
                 <div>
-                    <label className="flex cursor-pointer items-start gap-3">
-                        <input
-                            type="checkbox"
-                            checked={form.terms}
-                            onChange={(event) => updateField("terms", event.target.checked)}
-                            disabled={loading}
-                            className="mt-0.5 h-4 w-4 accent-purple-bright"
-                        />
-
-                        <span className="text-xs leading-5 text-muted">
-                            I agree to the Academy terms and understand that my information
-                            will be used to manage my Academy account.
-                        </span>
+                    <label
+                        htmlFor="country"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
+                    >
+                        Country
                     </label>
 
-                    {errors.terms && (
-                        <p className="mt-2 text-xs text-danger">{errors.terms}</p>
-                    )}
+                    <select
+                        id="country"
+                        name="country"
+                        value={form.country}
+                        onChange={handleChange}
+                        disabled={loading}
+                        className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {COUNTRIES.map((country) => (
+                            <option
+                                key={country.code}
+                                value={country.code}
+                            >
+                                {country.name} ({country.dialCode})
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
-                {serverError && (
-                    <div className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm leading-5 text-danger">
-                        {serverError}
-                    </div>
-                )}
+                <div>
+                    <label
+                        htmlFor="phone"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
+                    >
+                        Phone number
+                    </label>
 
-                {success && (
-                    <div className="rounded-2xl border border-success/20 bg-success/5 px-4 py-3 text-sm leading-5 text-success">
-                        Your account has been created. Check your email to verify your
-                        account.
-                    </div>
-                )}
+                    <div className="flex gap-2">
+                        <div className="flex h-12 shrink-0 items-center rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] px-4 text-sm font-medium text-[var(--foreground)]">
+                            {selectedCountry.dialCode}
+                        </div>
 
-                <Button
+                        <input
+                            id="phone"
+                            name="phone"
+                            type="tel"
+                            value={form.phone}
+                            onChange={handleChange}
+                            placeholder="0808 267 9797"
+                            autoComplete="tel"
+                            disabled={loading}
+                            className="h-12 min-w-0 flex-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="password"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
+                    >
+                        Password
+                    </label>
+
+                    <div className="relative">
+                        <input
+                            id="password"
+                            name="password"
+                            type={showPassword ? "text" : "password"}
+                            value={form.password}
+                            onChange={handleChange}
+                            placeholder="At least 8 characters"
+                            autoComplete="new-password"
+                            disabled={loading}
+                            className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 pr-12 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        />
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowPassword((current) => !current)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[var(--foreground-muted)] transition hover:bg-purple-500/10 hover:text-purple-600"
+                            aria-label={
+                                showPassword
+                                    ? "Hide password"
+                                    : "Show password"
+                            }
+                        >
+                            {showPassword ? (
+                                <EyeOff size={18} />
+                            ) : (
+                                <Eye size={18} />
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label
+                        htmlFor="confirmPassword"
+                        className="mb-2 block text-sm font-medium text-[var(--foreground)]"
+                    >
+                        Confirm password
+                    </label>
+
+                    <div className="relative">
+                        <input
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            type={
+                                showConfirmPassword ? "text" : "password"
+                            }
+                            value={form.confirmPassword}
+                            onChange={handleChange}
+                            placeholder="Enter your password again"
+                            autoComplete="new-password"
+                            disabled={loading}
+                            className="h-12 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 pr-12 text-sm text-[var(--foreground)] outline-none transition focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        />
+
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setShowConfirmPassword(
+                                    (current) => !current
+                                )
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-[var(--foreground-muted)] transition hover:bg-purple-500/10 hover:text-purple-600"
+                            aria-label={
+                                showConfirmPassword
+                                    ? "Hide password"
+                                    : "Show password"
+                            }
+                        >
+                            {showConfirmPassword ? (
+                                <EyeOff size={18} />
+                            ) : (
+                                <Eye size={18} />
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <label className="flex cursor-pointer items-start gap-3">
+                    <span className="relative mt-0.5">
+                        <input
+                            type="checkbox"
+                            name="terms"
+                            checked={form.terms}
+                            onChange={handleChange}
+                            disabled={loading}
+                            className="peer sr-only"
+                        />
+
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--surface)] transition peer-checked:border-purple-600 peer-checked:bg-purple-600">
+                            {form.terms && (
+                                <Check
+                                    size={13}
+                                    strokeWidth={3}
+                                    className="text-white"
+                                />
+                            )}
+                        </span>
+                    </span>
+
+                    <span className="text-sm leading-6 text-[var(--foreground-muted)]">
+                        I agree to the academy&apos;s terms and conditions.
+                    </span>
+                </label>
+
+                <button
                     type="submit"
-                    size="lg"
-                    className="h-12 w-full"
                     disabled={loading}
+                    className="group flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 text-sm font-semibold text-white shadow-lg shadow-purple-600/20 transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    {loading ? "Creating account..." : "Create account"}
-                </Button>
+                    {loading ? (
+                        <>
+                            <Loader2
+                                size={18}
+                                className="animate-spin"
+                            />
+                            Creating account...
+                        </>
+                    ) : (
+                        <>
+                            Create account
+                            <ArrowRight
+                                size={18}
+                                className="transition-transform group-hover:translate-x-0.5"
+                            />
+                        </>
+                    )}
+                </button>
             </form>
 
-            <p className="mt-7 text-center text-sm text-muted">
+            <p className="mt-7 text-center text-sm text-[var(--foreground-muted)]">
                 Already have an account?{" "}
                 <Link
                     href="/login"
-                    className="font-medium text-purple-bright transition-colors hover:text-purple-highlight"
+                    className="font-semibold text-[var(--primary)] transition hover:text-[var(--accent)]"
                 >
-                    Sign in
+                    Log in
                 </Link>
             </p>
-        </div>
+        </motion.div>
     );
 }
